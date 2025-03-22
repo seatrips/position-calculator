@@ -19,7 +19,7 @@
       border-radius: 10px;
       box-shadow: 0 4px 10px rgba(0,0,0,0.1);
       padding: 30px;
-      width: 350px;
+      width: 380px;
       text-align: center;
     }
     .calculator-container h1 {
@@ -51,10 +51,14 @@
     .tp-input {
       flex-grow: 1;
     }
+    .tp-percentage {
+      width: 60px;
+      margin-left: 5px;
+    }
     .checkbox-container {
       display: flex;
       align-items: center;
-      margin-left: 10px;
+      margin-left: 5px;
     }
     .checkbox-container input[type="checkbox"] {
       width: auto;
@@ -91,6 +95,11 @@
       color: #333;
     }
     .result p { margin: 5px 0; }
+    .percent-label {
+      display: flex;
+      align-items: center;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
@@ -124,6 +133,8 @@
     <label for="tp1">Take Profit 1 (TP1) (USD):</label>
     <div class="tp-container">
       <input type="number" id="tp1" placeholder="e.g. 1050" step="any" class="tp-input">
+      <input type="number" id="tp1Percent" placeholder="%" step="1" min="1" max="100" class="tp-percentage" value="50">
+      <div class="percent-label">%</div>
       <div class="checkbox-container">
         <input type="checkbox" id="tp1Enabled" checked>
         <span>Active</span>
@@ -133,6 +144,8 @@
     <label for="tp2">Take Profit 2 (TP2) (USD):</label>
     <div class="tp-container">
       <input type="number" id="tp2" placeholder="e.g. 1150" step="any" class="tp-input">
+      <input type="number" id="tp2Percent" placeholder="%" step="1" min="1" max="100" class="tp-percentage" value="50">
+      <div class="percent-label">%</div>
       <div class="checkbox-container">
         <input type="checkbox" id="tp2Enabled" checked>
         <span>Active</span>
@@ -158,9 +171,11 @@
       // Get TP1 and TP2 values and check if they're enabled
       var tp1 = parseFloat(document.getElementById("tp1").value);
       var tp1Enabled = document.getElementById("tp1Enabled").checked;
+      var tp1Percent = parseFloat(document.getElementById("tp1Percent").value);
       
       var tp2 = parseFloat(document.getElementById("tp2").value);
       var tp2Enabled = document.getElementById("tp2Enabled").checked;
+      var tp2Percent = parseFloat(document.getElementById("tp2Percent").value);
       
       // Validate primary inputs
       if(isNaN(notional) || isNaN(balance) || isNaN(riskPercent) ||
@@ -170,8 +185,30 @@
       }
       
       // Validate TP1 and TP2 if they're enabled
-      if((tp1Enabled && isNaN(tp1)) || (tp2Enabled && isNaN(tp2))) {
-        alert("Please fill in all enabled Take Profit fields with valid numbers.");
+      if((tp1Enabled && (isNaN(tp1) || isNaN(tp1Percent)))) {
+        alert("Please fill in all TP1 fields with valid numbers.");
+        return;
+      }
+      
+      if((tp2Enabled && (isNaN(tp2) || isNaN(tp2Percent)))) {
+        alert("Please fill in all TP2 fields with valid numbers.");
+        return;
+      }
+      
+      // Validate percentage values
+      if((tp1Enabled && (tp1Percent <= 0 || tp1Percent > 100))) {
+        alert("TP1 percentage must be between 1 and 100.");
+        return;
+      }
+      
+      if((tp2Enabled && (tp2Percent <= 0 || tp2Percent > 100))) {
+        alert("TP2 percentage must be between 1 and 100.");
+        return;
+      }
+      
+      // Check if TP1 + TP2 percentages exceed 100%
+      if(tp1Enabled && tp2Enabled && (tp1Percent + tp2Percent > 100)) {
+        alert("The sum of TP1 and TP2 percentages cannot exceed 100%.");
         return;
       }
       
@@ -239,8 +276,9 @@
       
       var effectiveTPGain = safeQuantity * perUnitProfit;
       
-      // Calculate profit for TP1
+      // Calculate profit for TP1 with percentage
       var effectiveTP1Gain = 0;
+      var tp1Quantity = 0;
       if(tp1Enabled) {
         var perUnitTP1Profit;
         if(positionType === "Long") {
@@ -248,11 +286,13 @@
         } else {
           perUnitTP1Profit = entry - tp1;
         }
-        effectiveTP1Gain = safeQuantity * perUnitTP1Profit;
+        tp1Quantity = safeQuantity * (tp1Percent / 100);
+        effectiveTP1Gain = tp1Quantity * perUnitTP1Profit;
       }
       
-      // Calculate profit for TP2
+      // Calculate profit for TP2 with percentage
       var effectiveTP2Gain = 0;
+      var tp2Quantity = 0;
       if(tp2Enabled) {
         var perUnitTP2Profit;
         if(positionType === "Long") {
@@ -260,22 +300,45 @@
         } else {
           perUnitTP2Profit = entry - tp2;
         }
-        effectiveTP2Gain = safeQuantity * perUnitTP2Profit;
+        tp2Quantity = safeQuantity * (tp2Percent / 100);
+        effectiveTP2Gain = tp2Quantity * perUnitTP2Profit;
       }
+      
+      // Calculate remaining quantity after TP1 and TP2
+      var totalTPPercentage = 0;
+      if(tp1Enabled) totalTPPercentage += tp1Percent;
+      if(tp2Enabled) totalTPPercentage += tp2Percent;
+      
+      var remainingQuantity = safeQuantity * (1 - totalTPPercentage / 100);
+      var remainingProfit = remainingQuantity * perUnitProfit;
       
       var resultHTML = "<h2>Calculation Result:</h2>";
       resultHTML += "<p><strong>Leverage:</strong> " + nominalLeverage.toFixed(2) + "x</p>";
-      resultHTML += "<p><strong>Quantity to Buy (" + riskPercent + "% risk):</strong> " + safeQuantity.toFixed(4) + " units</p>";
-      resultHTML += "<p><strong>Loss (SL):</strong> $" + effectiveSLLoss.toFixed(2) + "</p>";
-      resultHTML += "<p><strong>Profit (TP):</strong> $" + effectiveTPGain.toFixed(2) + "</p>";
+      resultHTML += "<p><strong>Position Size:</strong> " + safeQuantity.toFixed(4) + " units</p>";
+      resultHTML += "<p><strong>Potential Loss (SL):</strong> $" + effectiveSLLoss.toFixed(2) + "</p>";
       
       if(tp1Enabled) {
-        resultHTML += "<p><strong>Profit (TP1):</strong> $" + effectiveTP1Gain.toFixed(2) + "</p>";
+        resultHTML += "<p><strong>TP1 (at $" + tp1.toFixed(2) + "):</strong> " + tp1Percent + "% of position</p>";
+        resultHTML += "<p><strong>Profit at TP1:</strong> $" + effectiveTP1Gain.toFixed(2) + "</p>";
       }
       
       if(tp2Enabled) {
-        resultHTML += "<p><strong>Profit (TP2):</strong> $" + effectiveTP2Gain.toFixed(2) + "</p>";
+        resultHTML += "<p><strong>TP2 (at $" + tp2.toFixed(2) + "):</strong> " + tp2Percent + "% of position</p>";
+        resultHTML += "<p><strong>Profit at TP2:</strong> $" + effectiveTP2Gain.toFixed(2) + "</p>";
       }
+      
+      if(remainingQuantity > 0) {
+        resultHTML += "<p><strong>Remaining Position:</strong> " + (100 - totalTPPercentage) + "% (" + remainingQuantity.toFixed(4) + " units)</p>";
+        resultHTML += "<p><strong>Profit at TP (remaining):</strong> $" + remainingProfit.toFixed(2) + "</p>";
+      }
+      
+      // Calculate total profit
+      var totalProfit = effectiveTP1Gain + effectiveTP2Gain + remainingProfit;
+      resultHTML += "<p><strong>Total Max Profit:</strong> $" + totalProfit.toFixed(2) + "</p>";
+      
+      // Risk-Reward Ratio
+      var riskReward = totalProfit / effectiveSLLoss;
+      resultHTML += "<p><strong>Risk-Reward Ratio:</strong> 1:" + riskReward.toFixed(2) + "</p>";
       
       document.getElementById("result").innerHTML = resultHTML;
     }
