@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Risk-Managed Position Calculator</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    .ticker-container {
+      background: #333;
+      width: 100%;
+      overflow: hidden;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 1000;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .ticker {
+      white-space: nowrap;
+      padding: 10px 0;
+      display: inline-block;
+      animation: ticker-scroll 60s linear infinite;
+    }
+    .ticker-item {
+      display: inline-block;
+      margin: 0 15px;
+      color: #fff;
+      font-weight: bold;
+    }
+    .up {
+      color: #4caf50;
+    }
+    .down {
+      color: #f44336;
+    }
+    @keyframes ticker-scroll {
+      0% {
+        transform: translateX(100%);
+      }
+      100% {
+        transform: translateX(-180%);
+      }
+    }
+    .calculator-container {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      padding: 30px;
+      width: 380px;
+      text-align: center;
+      margin-top: 60px;
+    }
+    .calculator-container h1 {
+      margin-top: 0;
+      font-size: 24px;
+      margin-bottom: 20px;
+      color: #333;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+      text-align: left;
+      color: #555;
+      font-size: 14px;
+    }
+    input, select, textarea {
+      padding: 8px;
+      margin-top: 5px;
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+    .tp-container {
+      display: flex;
+      align-items: center;
+      margin-top: 5px;
+    }
+    .tp-input {
+      flex-grow: 1;
+    }
+    .tp-percentage {
+      width: 60px;
+      margin-left: 5px;
+    }
+    .checkbox-container {
+      display: flex;
+      align-items: center;
+      margin-left: 5px;
+    }
+    .checkbox-container input[type="checkbox"] {
+      width: auto;
+      margin: 0 5px 0 0;
+    }
+    .button {
+      margin-top: 20px;
+      padding: 10px;
+      width: 100%;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    .calc-button {
+      background-color: #28a745;
+      color: #fff;
+    }
+    .calc-button:hover {
+      background-color: #218838;
+    }
+    .export-button {
+      background-color: #007bff;
+      color: #fff;
+    }
+    .export-button:hover {
+      background-color: #0069d9;
+    }
+    .button-group {
+      display: flex;
+      gap: 10px;
+    }
+    .button-group .button {
+      flex: 1;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background-color: #f8f9fa;
+      text-align: left;
+      font-size: 14px;
+      color: #333;
+    }
+    .result h2 {
+      margin-top: 0;
+      font-size: 20px;
+      color: #333;
+    }
+    .result p { margin: 5px 0; }
+    .percent-label {
+      display: flex;
+      align-items: center;
+      font-size: 14px;
+    }
+    .reload-prices {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 1001;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 5px 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .loading-indicator {
+      display: inline-block;
+      margin-left: 5px;
+      width: 10px;
+      height: 10px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .trade-info {
+      margin-top: 5px;
+      padding-top: 10px;
+      border-top: 1px solid #ddd;
+    }
+    .date-time {
+      font-size: 12px;
+      color: #666;
+      text-align: right;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="ticker-container">
+    <div class="ticker" id="crypto-ticker">
+      <span class="ticker-item">Loading crypto prices...</span>
+    </div>
+  </div>
+  <button class="reload-prices" id="reload-prices">Refresh Prices</button>
+  
+  <div class="calculator-container">
+    <h1>Position Calculator</h1>
+    
+    <label for="asset">Asset:</label>
+    <input type="text" id="asset" placeholder="e.g. BTC/USD">
+    
+    <label for="notional">Amount to Spend (USD):</label>
+    <input type="number" id="notional" placeholder="e.g. 1000" step="any">
+    
+    <label for="balance">Account Balance (USD):</label>
+    <input type="number" id="balance" placeholder="e.g. 100" step="any">
+    
+    <label for="riskPercent">Risk per Trade (% of Account Balance):</label>
+    <input type="number" id="riskPercent" placeholder="e.g. 1" step="any">
+    
+    <label for="positionType">Position Type:</label>
+    <select id="positionType">
+      <option value="Long">Long</option>
+      <option value="Short">Short</option>
+    </select>
+    
+    <label for="entry">Entry Price (USD):</label>
+    <input type="number" id="entry" placeholder="e.g. 1000" step="any">
+    
+    <label for="sl">Stop Loss (USD):</label>
+    <input type="number" id="sl" placeholder="e.g. 900" step="any">
+    
+    <label for="tp">Take Profit (TP) (USD):</label>
+    <input type="number" id="tp" placeholder="e.g. 1100" step="any">
+    
+    <label for="tp1">Take Profit 1 (TP1) (USD):</label>
+    <div class="tp-container">
+      <input type="number" id="tp1" placeholder="e.g. 1050" step="any" class="tp-input">
+      <input type="number" id="tp1Percent" placeholder="%" step="1" min="1" max="100" class="tp-percentage" value="50">
+      <div class="percent-label">%</div>
+      <div class="checkbox-container">
+        <input type="checkbox" id="tp1Enabled" checked>
+        <span>Active</span>
+      </div>
+    </div>
+    
+    <label for="tp2">Take Profit 2 (TP2) (USD):</label>
+    <div class="tp-container">
+      <input type="number" id="tp2" placeholder="e.g. 1150" step="any" class="tp-input">
+      <input type="number" id="tp2Percent" placeholder="%" step="1" min="1" max="100" class="tp-percentage" value="50">
+      <div class="percent-label">%</div>
+      <div class="checkbox-container">
+        <input type="checkbox" id="tp2Enabled" checked>
+        <span>Active</span>
+      </div>
+    </div>
+    
+    <label for="remarks">Trade Remarks:</label>
+    <textarea id="remarks" placeholder="Add your thoughts, strategy, or trade rationale here..."></textarea>
+    
+    <div class="button-group">
+      <button class="button calc-button" onclick="calculate()">Calculate</button>
+      <button class="button export-button" onclick="exportToPDF()">Export PDF</button>
+    </div>
+    
+    <div class="result" id="result"></div>
+  </div>
+  
+  <!-- Include jsPDF library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  
+  <script>
+    // List of stablecoins to exclude
+    const stablecoins = [
+      'tether', 'usd-coin', 'dai', 'binance-usd', 'true-usd', 
+      'frax', 'paxos-standard', 'gemini-dollar', 'usdd'
+    ];
+    
+    // Function to fetch top cryptocurrencies from CoinGecko API
+    async function fetchTopCryptos() {
+      try {
+        // Add loading indicator to refresh button
+        const reloadButton = document.getElementById('reload-prices');
+        reloadButton.innerHTML = 'Refreshing <span class="loading-indicator"></span>';
+        reloadButton.disabled = true;
+        
+        // Fetch data from CoinGecko
+        const response = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1&sparkline=false&price_change_percentage=24h');
+        const data = await response.json();
+        
+        // Filter out stablecoins and get top 10
+        const filteredCoins = data.filter(coin => !stablecoins.includes(coin.id)).slice(0, 10);
+        
+        // Create ticker items
+        let tickerHTML = '';
+        filteredCoins.forEach(coin => {
+          const priceChangeClass = coin.price_change_percentage_24h >= 0 ? 'up' : 'down';
+          const priceChangeSymbol = coin.price_change_percentage_24h >= 0 ? '▲' : '▼';
+          
+          tickerHTML += `<span class="ticker-item">${coin.symbol.toUpperCase()}: $${coin.current_price.toFixed(2)} <span class="${priceChangeClass}">${priceChangeSymbol} ${Math.abs(coin.price_change_percentage_24h).toFixed(2)}%</span></span>`;
+        });
+        
+        document.getElementById('crypto-ticker').innerHTML = tickerHTML;
+        
+        // Remove loading indicator
+        reloadButton.innerHTML = 'Refresh Prices';
+        reloadButton.disabled = false;
+      } catch (error) {
+        console.error('Error fetching crypto data:', error);
+        document.getElementById('crypto-ticker').innerHTML = '<span class="ticker-item">Unable to load crypto prices. Please try again later.</span>';
+        
+        // Remove loading indicator
+        const reloadButton = document.getElementById('reload-prices');
+        reloadButton.innerHTML = 'Refresh Prices';
+        reloadButton.disabled = false;
+      }
+    }
+    
+    // Add event listener to reload button
+    document.getElementById('reload-prices').addEventListener('click', fetchTopCryptos);
+    
+    // Load prices on page load
+    window.addEventListener('load', fetchTopCryptos);
+    
+    // Global variable to store calculation results
+    let calculationResults = null;
+    
+    function calculate() {
+      // Retrieve inputs
+      var asset = document.getElementById("asset").value || "Unnamed Asset";
+      var notional = parseFloat(document.getElementById("notional").value);
+      var balance = parseFloat(document.getElementById("balance").value);
+      var riskPercent = parseFloat(document.getElementById("riskPercent").value);
+      var positionType = document.getElementById("positionType").value;
+      var entry = parseFloat(document.getElementById("entry").value);
+      var sl = parseFloat(document.getElementById("sl").value);
+      var tp = parseFloat(document.getElementById("tp").value);
+      var remarks = document.getElementById("remarks").value;
+      
+      // Get TP1 and TP2 values and check if they're enabled
+      var tp1 = parseFloat(document.getElementById("tp1").value);
+      var tp1Enabled = document.getElementById("tp1Enabled").checked;
+      var tp1Percent = parseFloat(document.getElementById("tp1Percent").value);
+      
+      var tp2 = parseFloat(document.getElementById("tp2").value);
+      var tp2Enabled = document.getElementById("tp2Enabled").checked;
+      var tp2Percent = parseFloat(document.getElementById("tp2Percent").value);
+      
+      // Current date and time
+      var currentDate = new Date();
+      var dateTimeString = currentDate.toLocaleString();
+      
+      // Validate primary inputs
+      if(isNaN(notional) || isNaN(balance) || isNaN(riskPercent) ||
+         isNaN(entry) || isNaN(sl) || isNaN(tp)) {
+        alert("Please fill in all required fields with valid numbers.");
+        return;
+      }
+      
+      // Validate TP1 and TP2 if they're enabled
+      if((tp1Enabled && (isNaN(tp1) || isNaN(tp1Percent)))) {
+        alert("Please fill in all TP1 fields with valid numbers.");
+        return;
+      }
+      
+      if((tp2Enabled && (isNaN(tp2) || isNaN(tp2Percent)))) {
+        alert("Please fill in all TP2 fields with valid numbers.");
+        return;
+      }
+      
+      // Validate percentage values
+      if((tp1Enabled && (tp1Percent <= 0 || tp1Percent > 100))) {
+        alert("TP1 percentage must be between 1 and 100.");
+        return;
+      }
+      
+      if((tp2Enabled && (tp2Percent <= 0 || tp2Percent > 100))) {
+        alert("TP2 percentage must be between 1 and 100.");
+        return;
+      }
+      
+      // Check if TP1 + TP2 percentages exceed 100%
+      if(tp1Enabled && tp2Enabled && (tp1Percent + tp2Percent > 100)) {
+        alert("The sum of TP1 and TP2 percentages cannot exceed 100%.");
+        return;
+      }
+      
+      // Nominal Leverage: desired notional / account balance.
+      var nominalLeverage = notional / balance;
+      
+      // Target risk (in USD) is based on the account balance.
+      var targetRisk = balance * (riskPercent / 100);
+      
+      // Calculate per-unit risk.
+      var perUnitRisk;
+      if(positionType === "Long") {
+        perUnitRisk = entry - sl;
+        if(perUnitRisk <= 0) {
+          alert("For Long positions, Stop Loss must be below Entry price.");
+          return;
+        }
+      } else {
+        perUnitRisk = sl - entry;
+        if(perUnitRisk <= 0) {
+          alert("For Short positions, Stop Loss must be above Entry price.");
+          return;
+        }
+      }
+      
+      // Safe quantity to buy so that loss equals targetRisk.
+      var safeQuantity = targetRisk / perUnitRisk;
+      
+      // Effective SL Loss (should equal targetRisk).
+      var effectiveSLLoss = safeQuantity * perUnitRisk;
+      
+      // Calculate profit for main TP
+      var perUnitProfit;
+      if(positionType === "Long") {
+        perUnitProfit = tp - entry;
+        // Validate TP values for Long position
+        if(perUnitProfit <= 0) {
+          alert("For Long positions, Take Profit must be above Entry price.");
+          return;
+        }
+        if(tp1Enabled && (tp1 <= entry)) {
+          alert("For Long positions, TP1 must be above Entry price.");
+          return;
+        }
+        if(tp2Enabled && (tp2 <= entry)) {
+          alert("For Long positions, TP2 must be above Entry price.");
+          return;
+        }
+      } else {
+        perUnitProfit = entry - tp;
+        // Validate TP values for Short position
+        if(perUnitProfit <= 0) {
+          alert("For Short positions, Take Profit must be below Entry price.");
+          return;
+        }
+        if(tp1Enabled && (tp1 >= entry)) {
+          alert("For Short positions, TP1 must be below Entry price.");
+          return;
+        }
+        if(tp2Enabled && (tp2 >= entry)) {
+          alert("For Short positions, TP2 must be below Entry price.");
+          return;
+        }
+      }
+      
+      var effectiveTPGain = safeQuantity * perUnitProfit;
+      
+      // Calculate profit for TP1 with percentage
+      var effectiveTP1Gain = 0;
+      var tp1Quantity = 0;
+      if(tp1Enabled) {
+        var perUnitTP1Profit;
+        if(positionType === "Long") {
+          perUnitTP1Profit = tp1 - entry;
+        } else {
+          perUnitTP1Profit = entry - tp1;
+        }
+        tp1Quantity = safeQuantity * (tp1Percent / 100);
+        effectiveTP1Gain = tp1Quantity * perUnitTP1Profit;
+      }
+      
+      // Calculate profit for TP2 with percentage
+      var effectiveTP2Gain = 0;
+      var tp2Quantity = 0;
+      if(tp2Enabled) {
+        var perUnitTP2Profit;
+        if(positionType === "Long") {
+          perUnitTP2Profit = tp2 - entry;
+        } else {
+          perUnitTP2Profit = entry - tp2;
+        }
+        tp2Quantity = safeQuantity * (tp2Percent / 100);
+        effectiveTP2Gain = tp2Quantity * perUnitTP2Profit;
+      }
+      
+      // Calculate remaining quantity after TP1 and TP2
+      var totalTPPercentage = 0;
+      if(tp1Enabled) totalTPPercentage += tp1Percent;
+      if(tp2Enabled) totalTPPercentage += tp2Percent;
+      
+      var remainingQuantity = safeQuantity * (1 - totalTPPercentage / 100);
+      var remainingProfit = remainingQuantity * perUnitProfit;
+      
+      var resultHTML = "<h2>Calculation Result:</h2>";
+      resultHTML += "<p><strong>Asset:</strong> " + asset + "</p>";
+      resultHTML += "<p><strong>Position Type:</strong> " + positionType + "</p>";
+      resultHTML += "<p><strong>Entry Price:</strong> $" + entry.toFixed(2) + "</p>";
+      resultHTML += "<p><strong>Stop Loss:</strong> $" + sl.toFixed(2) + "</p>";
+      resultHTML += "<p><strong>Leverage:</strong> " + nominalLeverage.toFixed(2) + "x</p>";
+      resultHTML += "<p><strong>Position Size:</strong> " + safeQuantity.toFixed(4) + " units</p>";
+      resultHTML += "<p><strong>Potential Loss (SL):</strong> $" + effectiveSLLoss.toFixed(2) + "</p>";
+      
+      if(tp1Enabled) {
+        resultHTML += "<p><strong>TP1 (at $" + tp1.toFixed(2) + "):</strong> " + tp1Percent + "% of position</p>";
+        resultHTML += "<p><strong>Profit at TP1:</strong> $" + effectiveTP1Gain.toFixed(2) + "</p>";
+      }
+      
+      if(tp2Enabled) {
+        resultHTML += "<p><strong>TP2 (at $" + tp2.toFixed(2) + "):</strong> " + tp2Percent + "% of position</p>";
+        resultHTML += "<p><strong>Profit at TP2:</strong> $" + effectiveTP2Gain.toFixed(2) + "</p>";
+      }
+      
+      if(remainingQuantity > 0) {
+        resultHTML += "<p><strong>Remaining Position:</strong> " + (100 - totalTPPercentage) + "% (" + remainingQuantity.toFixed(4) + " units)</p>";
+        resultHTML += "<p><strong>Profit at TP (remaining):</strong> $" + remainingProfit.toFixed(2) + "</p>";
+      }
+      
+      // Calculate total profit
+      var totalProfit = effectiveTP1Gain + effectiveTP2Gain + remainingProfit;
+      resultHTML += "<p><strong>Total Max Profit:</strong> $" + totalProfit.toFixed(2) + "</p>";
+      
+      // Risk-Reward Ratio
+      var riskReward = totalProfit / effectiveSLLoss;
+      resultHTML += "<p><strong>Risk-Reward Ratio:</strong> 1:" + riskReward.toFixed(2) + "</p>";
+      
+      // Add remarks if there are any
+      if(remarks) {
+        resultHTML += "<div class='trade-info'><p><strong>Remarks:</strong></p><p>" + remarks.replace(/\n/g, '<br>') + "</p></div>";
+      }
+      
+      // Add timestamp
+      resultHTML += "<div class='date-time'>Calculated on: " + dateTimeString + "</div>";
+      
+      // Store calculation results for PDF export
+      calculationResults = {
+        asset,
+        positionType,
+        entry,
+        sl,
+        tp,
+        nominalLeverage,
+        safeQuantity,
+        effectiveSLLoss,
+        tp1: tp1Enabled ? tp1 : null,
+        tp1Percent: tp1Enabled ? tp1Percent : null,
+        effectiveTP1Gain: tp1Enabled ? effectiveTP1Gain : null,
+        tp2: tp2Enabled ? tp2 : null,
+        tp2Percent: tp2Enabled ? tp2Percent : null,
+        effectiveTP2Gain: tp2Enabled ? effectiveTP2Gain : null,
+        remainingQuantity,
+        remainingProfit,
+        totalProfit,
+        riskReward,
+        remarks,
+        dateTimeString
+      };
+      
+      document.getElementById("result").innerHTML = resultHTML;
+    }
+    
+    function exportToPDF() {
+      // Check if calculation was performed
+      if (!calculationResults) {
+        alert("Please calculate position details first before exporting to PDF.");
+        return;
+      }
+      
+      // Create new jsPDF instance
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      
+      // Set font size and styles
+      doc.setFontSize(20);
+      doc.text("Trade Position Details", 105, 20, null, null, "center");
+      
+      doc.setFontSize(12);
+      doc.text("Asset: " + calculationResults.asset, 20, 40);
+      doc.text("Position Type: " + calculationResults.positionType, 20, 50);
+      doc.text("Entry Price: $" + calculationResults.entry.toFixed(2), 20, 60);
+      doc.text("Stop Loss: $" + calculationResults.sl.toFixed(2), 20, 70);
+      doc.text("Leverage: " + calculationResults.nominalLeverage.toFixed(2) + "x", 20, 80);
+      doc.text("Position Size: " + calculationResults.safeQuantity.toFixed(4) + " units", 20, 90);
+      doc.text("Potential Loss (SL): $" + calculationResults.effectiveSLLoss.toFixed(2), 20, 100);
+      
+      let yPosition = 110;
+      
+      // TP1 information if enabled
+      if (calculationResults.tp1 !== null) {
+        doc.text("TP1 (at $" + calculationResults.tp1.toFixed(2) + "): " + calculationResults.tp1Percent + "% of position", 20, yPosition);
+        yPosition += 10;
+        doc.text("Profit at TP1: $" + calculationResults.effectiveTP1Gain.toFixed(2), 20, yPosition);
+        yPosition += 10;
+      }
+      
+      // TP2 information if enabled
+      if (calculationResults.tp2 !== null) {
+        doc.text("TP2 (at $" + calculationResults.tp2.toFixed(2) + "): " + calculationResults.tp2Percent + "% of position", 20, yPosition);
+        yPosition += 10;
+        doc.text("Profit at TP2: $" + calculationResults.effectiveTP2Gain.toFixed(2), 20, yPosition);
+        yPosition += 10;
+      }
+      
+      // Remaining position information
+      if (calculationResults.remainingQuantity > 0) {
+        const remainingPercent = calculationResults.tp1Percent && calculationResults.tp2Percent ? 
+              (100 - calculationResults.tp1Percent - calculationResults.tp2Percent) : 
+              (calculationResults.tp1Percent ? (100 - calculationResults.tp1Percent) : 100);
+              
+        doc.text("Remaining Position: " + remainingPercent + "% (" + calculationResults.remainingQuantity.toFixed(4) + " units)", 20, yPosition);
+        yPosition += 10;
+        doc.text("Profit at TP (remaining): $" + calculationResults.remainingProfit.toFixed(2), 20, yPosition);
+        yPosition += 10;
+      }
+      
+      // Summary stats
+      doc.text("Total Max Profit: $" + calculationResults.totalProfit.toFixed(2), 20, yPosition);
+      yPosition += 10;
+      doc.text("Risk-Reward Ratio: 1:" + calculationResults.riskReward.toFixed(2), 20, yPosition);
+      yPosition += 20;
+      
+      // Add remarks if any
+      if (calculationResults.remarks) {
+        doc.setFontSize(14);
+        doc.text("Trade Remarks:", 20, yPosition);
+        yPosition += 10;
+        
+        doc.setFontSize(12);
+        // Split remarks into lines that fit PDF width
+        const splitRemarks = doc.splitTextToSize(calculationResults.remarks, 170);
+        doc.text(splitRemarks, 20, yPosition);
+        yPosition += splitRemarks.length * 7;
+      }
+      
+      // Add date/time at the bottom
+      doc.setFontSize(10);
+      doc.text("Generated on: " + calculationResults.dateTimeString, 20, 280);
+      
+      // Generate the filename with current date
+      const dateForFilename = new Date().toISOString().slice(0, 10);
+      const filename = `${calculationResults.asset.replace(/[\/\\:*?"<>|]/g, "_")}_${calculationResults.positionType}_${dateForFilename}.pdf`;
+      
+      // Save the PDF
+      doc.save(filename);
+    }
+  </script>
+</body>
+</html>
