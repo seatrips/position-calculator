@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Risk-Managed Position Calculator</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+      font-family: Arial, sans-serif;
+    }
+    .calculator-container {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      padding: 30px;
+      width: 350px;
+      text-align: center;
+    }
+    .calculator-container h1 {
+      margin-top: 0;
+      font-size: 24px;
+      margin-bottom: 20px;
+      color: #333;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+      text-align: left;
+      color: #555;
+      font-size: 14px;
+    }
+    input, select {
+      padding: 8px;
+      margin-top: 5px;
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    .calc-button {
+      margin-top: 20px;
+      padding: 10px;
+      width: 100%;
+      border: none;
+      border-radius: 5px;
+      background-color: #28a745;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    .calc-button:hover {
+      background-color: #218838;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background-color: #f8f9fa;
+      text-align: left;
+      font-size: 14px;
+      color: #333;
+    }
+    .result h2 {
+      margin-top: 0;
+      font-size: 20px;
+      color: #333;
+    }
+    .result p { margin: 5px 0; }
+  </style>
+</head>
+<body>
+  <div class="calculator-container">
+    <h1>Position Calculator</h1>
+    
+    <label for="notional">Amount to Spend (USD):</label>
+    <input type="number" id="notional" placeholder="e.g. 1000" step="any">
+    
+    <label for="balance">Account Balance (USD):</label>
+    <input type="number" id="balance" placeholder="e.g. 100" step="any">
+    
+    <label for="riskPercent">Risk per Trade (% of Account Balance):</label>
+    <input type="number" id="riskPercent" placeholder="e.g. 1" step="any">
+    
+    <label for="positionType">Position Type:</label>
+    <select id="positionType">
+      <option value="Long">Long</option>
+      <option value="Short">Short</option>
+    </select>
+    
+    <label for="entry">Entry Price (USD):</label>
+    <input type="number" id="entry" placeholder="e.g. 1000" step="any">
+    
+    <label for="sl">Stop Loss (USD):</label>
+    <input type="number" id="sl" placeholder="e.g. 900" step="any">
+    
+    <label for="tp">Take Profit (USD):</label>
+    <input type="number" id="tp" placeholder="e.g. 1100" step="any">
+    
+    <button class="calc-button" onclick="calculate()">Calculate</button>
+    
+    <div class="result" id="result"></div>
+  </div>
+  
+  <script>
+    function calculate() {
+      // Retrieve inputs
+      var notional = parseFloat(document.getElementById("notional").value);
+      var balance = parseFloat(document.getElementById("balance").value);
+      var riskPercent = parseFloat(document.getElementById("riskPercent").value);
+      var positionType = document.getElementById("positionType").value;
+      var entry = parseFloat(document.getElementById("entry").value);
+      var sl = parseFloat(document.getElementById("sl").value);
+      var tp = parseFloat(document.getElementById("tp").value);
+      
+      if(isNaN(notional) || isNaN(balance) || isNaN(riskPercent) ||
+         isNaN(entry) || isNaN(sl) || isNaN(tp)) {
+        alert("Please fill in all fields with valid numbers.");
+        return;
+      }
+      
+      // Nominal Leverage: desired notional / account balance.
+      var nominalLeverage = notional / balance;
+      
+      // Target risk (in USD) is based on the account balance.
+      var targetRisk = balance * (riskPercent / 100);
+      
+      // Calculate per-unit risk.
+      var perUnitRisk;
+      if(positionType === "Long") {
+        perUnitRisk = entry - sl;
+      } else {
+        perUnitRisk = sl - entry;
+      }
+      
+      if(perUnitRisk <= 0) {
+        alert("Check your Entry and SL values: for Long, SL must be below Entry; for Short, above Entry.");
+        return;
+      }
+      
+      // Safe quantity to buy so that loss equals targetRisk.
+      var safeQuantity = targetRisk / perUnitRisk;
+      
+      // Effective SL Loss (should equal targetRisk).
+      var effectiveSLLoss = safeQuantity * perUnitRisk;
+      
+      // Effective TP Gain using safe quantity.
+      var perUnitProfit;
+      if(positionType === "Long") {
+        perUnitProfit = tp - entry;
+      } else {
+        perUnitProfit = entry - tp;
+      }
+      var effectiveTPGain = safeQuantity * perUnitProfit;
+      
+      var resultHTML = "<h2>Calculation Result:</h2>";
+      resultHTML += "<p><strong>Leverage:</strong> " + nominalLeverage.toFixed(2) + "x</p>";
+      resultHTML += "<p><strong>Quantity to Buy (" + riskPercent + "% risk):</strong> " + safeQuantity.toFixed(4) + " units</p>";
+      resultHTML += "<p><strong>Loss:</strong> $" + effectiveSLLoss.toFixed(2) + "</p>";
+      resultHTML += "<p><strong>Profit:</strong> $" + effectiveTPGain.toFixed(2) + "</p>";
+      
+      document.getElementById("result").innerHTML = resultHTML;
+    }
+  </script>
+</body>
+</html>
